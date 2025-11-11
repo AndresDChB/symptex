@@ -10,7 +10,7 @@ from chains.formatting import format_patient_details
 
 from app.db.db import get_db
 from sqlalchemy.orm import Session
-from app.db.models import ChatSession, ChatMessage, PatientFile
+from app.db.models import ChatSession, ChatMessage, PatientFile, AnamDoc
 
 # Set up logging
 logger = logging.getLogger('uvicorn.error')
@@ -58,6 +58,9 @@ async def chat_with_llm(request: ChatRequest, db: Session = Depends(get_db)):
         return PlainTextResponse("Patient not found", status_code=404)
     patient_details = format_patient_details(patient_file)
 
+    patient_docs = db.query(AnamDoc).filter(AnamDoc.patient_file_id == patient_file.id).all()
+    #todo format patient docs update prompt, check that the LLM is aware of the new context
+    
     # Create or get chat session
     session = db.query(ChatSession).filter(
         ChatSession.id == request.session_id
@@ -107,6 +110,7 @@ async def chat_with_llm(request: ChatRequest, db: Session = Depends(get_db)):
                     condition=request.condition,
                     talkativeness=request.talkativeness,
                     patient_details=patient_details,
+                    patient_docs=patient_docs,
                     session_id=request.session_id,
                     previous_messages=messages
                 ):
@@ -188,7 +192,8 @@ async def stream_response(
     model: str, 
     condition: str, 
     talkativeness: str, 
-    patient_details: str, 
+    patient_details: str,
+    patient_docs: str,
     session_id: str,
     previous_messages: list
 ) -> AsyncGenerator[str, None]:
@@ -217,6 +222,7 @@ async def stream_response(
                 "condition": condition,
                 "talkativeness": talkativeness,
                 "patient_details": patient_details,
+                "patient_docs": patient_docs,
             },
             stream_mode="messages"
         ):

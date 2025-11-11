@@ -43,3 +43,12 @@ class Anamnesis(Base):
     answer = Column(String)
     patient_file_id = Column(Integer, ForeignKey("patient_files.id"))
     patient_file = relationship("PatientFile", back_populates="anamneses")
+
+class AnamDoc(Base):
+    __tablename__ = "anam_docs"
+    id = Column(Integer, primary_key=True, index=True)
+    file_path = Column(String)
+    type = Column(String)
+    patient_file_id = Column(Integer, ForeignKey("patient_files.id"))
+    patient_file = relationship("PatientFile", back_populates="anamneses")
+    description = Column(Text)

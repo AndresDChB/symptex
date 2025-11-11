@@ -25,6 +25,7 @@ class CustomState(TypedDict):
     condition: str
     talkativeness: str
     patient_details: str
+    patient_docs: str
         
 # Set up env variables
 CHATAI_API_URL = os.environ.get("CHATAI_API_URL")
@@ -59,6 +60,7 @@ async def call_patient_model(state: CustomState):
     logger.debug("Calling patient model {model} with condition {condition}, talkativeness {talkativeness} and patient_details {patient_details}")
 
     # Get appropriate prompt
+    #todo include patient docs here, create tool to send docs to frontend
     prompt = get_prompt(condition, talkativeness, patient_details)
     chain = prompt | get_llm(model)
 
