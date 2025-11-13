@@ -25,7 +25,7 @@ class CustomState(TypedDict):
     condition: str
     talkativeness: str
     patient_details: str
-    patient_docs: str
+    patient_doc_md: str
         
 # Set up env variables
 CHATAI_API_URL = os.environ.get("CHATAI_API_URL")

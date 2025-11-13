@@ -58,7 +58,7 @@ async def chat_with_llm(request: ChatRequest, db: Session = Depends(get_db)):
         return PlainTextResponse("Patient not found", status_code=404)
     patient_details = format_patient_details(patient_file)
 
-    patient_docs = db.query(AnamDoc).filter(AnamDoc.patient_file_id == patient_file.id).all()
+    patient_doc_md = db.query(AnamDoc).filter(AnamDoc.patient_file_id == patient_file.id).all()
     #todo format patient docs update prompt, check that the LLM is aware of the new context
     
     # Create or get chat session
@@ -110,7 +110,7 @@ async def chat_with_llm(request: ChatRequest, db: Session = Depends(get_db)):
                     condition=request.condition,
                     talkativeness=request.talkativeness,
                     patient_details=patient_details,
-                    patient_docs=patient_docs,
+                    patient_doc_md = patient_doc_md,
                     session_id=request.session_id,
                     previous_messages=messages
                 ):
@@ -193,7 +193,7 @@ async def stream_response(
     condition: str, 
     talkativeness: str, 
     patient_details: str,
-    patient_docs: str,
+    patient_doc_md: str,
     session_id: str,
     previous_messages: list
 ) -> AsyncGenerator[str, None]:
@@ -222,7 +222,7 @@ async def stream_response(
                 "condition": condition,
                 "talkativeness": talkativeness,
                 "patient_details": patient_details,
-                "patient_docs": patient_docs,
+                "patient_doc_md": patient_doc_md,
             },
             stream_mode="messages"
         ):
