@@ -56,12 +56,13 @@ async def call_patient_model(state: CustomState):
     condition = state.get("condition")
     talkativeness = state.get("talkativeness")
     patient_details = state.get("patient_details")
+    patient_doc_md = state.get("patient_doc_md")
 
     logger.debug("Calling patient model {model} with condition {condition}, talkativeness {talkativeness} and patient_details {patient_details}")
 
     # Get appropriate prompt
-    #todo include patient docs here, create tool to send docs to frontend
-    prompt = get_prompt(condition, talkativeness, patient_details)
+    #todo include create tool to send docs to frontend
+    prompt = get_prompt(condition, talkativeness, patient_details, patient_doc_md)
     chain = prompt | get_llm(model)
 
     try:
@@ -75,7 +76,7 @@ async def call_patient_model(state: CustomState):
         return {
             "messages": [
                 {
-                    "role": "patient",
+                    "role": "ai",
                     "content": f"Entschuldigung, es ist ein Fehler aufgetreten: {str(e)}"
                 }
             ]

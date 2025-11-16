@@ -34,6 +34,7 @@ class PatientFile(Base):
     gender_medical = Column(String)
     ethnic_origin = Column(String)
     anamneses = relationship("Anamnesis", back_populates="patient_file")
+    anam_docs = relationship("AnamDoc", back_populates="patient_file")
 
 class Anamnesis(Base):
     __tablename__ = "anamneses"
@@ -50,5 +51,5 @@ class AnamDoc(Base):
     file_path = Column(String)
     type = Column(String)
     patient_file_id = Column(Integer, ForeignKey("patient_files.id"))
-    patient_file = relationship("PatientFile", back_populates="anamneses")
+    patient_file = relationship("PatientFile", back_populates="anam_docs")
     description = Column(Text)

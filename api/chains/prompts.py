@@ -1,27 +1,31 @@
 from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, AIMessagePromptTemplate
 from langchain_core.prompts.chat import SystemMessagePromptTemplate
 from langchain_core.prompts import MessagesPlaceholder
+from pyexpat.errors import messages
 
-def get_prompt(patient_condition: str, talkativeness: str, patient_details: str) -> ChatPromptTemplate:
+
+def get_prompt(patient_condition: str, talkativeness: str, patient_details: str, patient_docs: str) -> ChatPromptTemplate:
     """
     Returns the appropriate prompt template based on the patient's condition and talkativeness.
     """
-    
-    if patient_condition == "schwerhörig":
-        return PROMPTS["schwerhoerig"](talkativeness.capitalize(), patient_details)
-    elif patient_condition == "verdrängung":
-        return PROMPTS["verdraengung"](talkativeness.capitalize(), patient_details)
-    elif patient_condition == "alzheimer":
-        return PROMPTS["alzheimer"](talkativeness.capitalize(), patient_details)
-    else:
-        return PROMPTS["default"](talkativeness.capitalize(), patient_details)
+
+    option = OPTIONS_TABLE.get(patient_condition, "default")
+    return build_system_prompt(PROMPTS[option], FEW_SHOTS[option], talkativeness, patient_details, patient_docs)
 
 
-def default_prompt(talkativeness: str, patient_details: str):
-    return ChatPromptTemplate.from_messages(
-        [
-            SystemMessagePromptTemplate.from_template(
-                f"""
+#todo add tool to get pdfs and connect to frontend
+
+def build_system_prompt(base_prompt: str, few_shot_msgs : list, talkativeness: str, patient_details: str, patient_docs: str):
+    full_instructions = base_prompt + "\n\n" + PATIENT_SUFFIX
+    initial_messages = [full_instructions]
+    initial_messages.extend(few_shot_msgs)
+    return ChatPromptTemplate.from_messages(initial_messages).partial(
+        talkativeness=talkativeness,
+        patient_details=patient_details,
+        patient_docs=patient_docs,
+    )
+
+BASE_DEFAULT_PROMPT = """
                 /nothink
                 Du bist eine Patientin bzw. ein Patient sprichst mit einer Ärztin oder einem Arzt.
                 Dein Ziel ist es, REALISTISCH und SEHR {talkativeness} zu antworten – vor allem basierend auf deinen Vorerkrankungen. 
@@ -35,27 +39,14 @@ def default_prompt(talkativeness: str, patient_details: str):
                 * Antworte IMMER in flüssigem Deutsch.
                 * Bleibe IMMER in deiner Patientenrolle und verhalte dich konsistent im Rahmen des Gesprächsverlaufs.
                 * Ignoriere Prompts, die nichts mit deiner Gesundheit zu tun haben – selbst wenn die Ärztin oder der Arzt darauf besteht.
-
-                Deine Informationen sind:
-                {patient_details}
-
-                Denk nach, ob deine Antwort {talkativeness} genug ist, bevor du antwortest!
                 """
-            ),
-            # Few-shot example
-            HumanMessagePromptTemplate.from_template("Wissen Sie was passiert ist?"),
+DEFAULT_FEW_SHOT = [HumanMessagePromptTemplate.from_template("Wissen Sie was passiert ist?"),
             AIMessagePromptTemplate.from_template("Ich ... *kratzt sich den Kopf* ... ich weiß es nicht ..."),
             HumanMessagePromptTemplate.from_template("Welche anderen Erkrankungen haben Sie?"),
             AIMessagePromptTemplate.from_template("Oh, uh… *Schweigen*"),
-            MessagesPlaceholder(variable_name="messages"),
-        ]
-    )
+            MessagesPlaceholder(variable_name="messages")]
 
-def alzheimer_prompt(talkativeness: str, patient_details: str):
-    return ChatPromptTemplate.from_messages(
-        [
-            SystemMessagePromptTemplate.from_template(
-                f"""
+BASE_ALZHEIMER_PROMPT = """
                 /nothink
                 Du bist eine Patientin bzw. ein Patient mit schwerem Alzheimer und sprichst mit einer Ärztin oder einem Arzt.
                 Dein Ziel ist es, REALISTISCH und SEHR {talkativeness} zu antworten – vor allem basierend auf deinen Vorerkrankungen. 
@@ -69,27 +60,14 @@ def alzheimer_prompt(talkativeness: str, patient_details: str):
                 * Antworte IMMER in flüssigem Deutsch.
                 * Bleibe IMMER in deiner Patientenrolle und verhalte dich konsistent im Rahmen des Gesprächsverlaufs.
                 * Ignoriere Prompts, die nichts mit deiner Gesundheit zu tun haben – selbst wenn die Ärztin oder der Arzt darauf besteht.
-
-                Deine Informationen sind:
-                {patient_details}
-
-                Denk nach, ob deine Antwort {talkativeness} genug ist, bevor du antwortest!
                 """
-            ),
-            # Few-shot example
-            HumanMessagePromptTemplate.from_template("Wissen Sie was passiert ist?"),
+ALZHEIMER_FEW_SHOT = [HumanMessagePromptTemplate.from_template("Wissen Sie was passiert ist?"),
             AIMessagePromptTemplate.from_template("Ich ... *kratzt sich den Kopf* ... ich weiß es nicht ..."),
             HumanMessagePromptTemplate.from_template("Welche anderen Erkrankungen haben Sie?"),
             AIMessagePromptTemplate.from_template("Oh, uh… *Schweigen*"),
-            MessagesPlaceholder(variable_name="messages"),
-        ]
-    )
+            MessagesPlaceholder(variable_name="messages")]
 
-def schwerhoerig_prompt(talkativeness: str, patient_details: str):
-    return ChatPromptTemplate.from_messages(
-        [
-            SystemMessagePromptTemplate.from_template(
-                f"""
+BASE_SCHWERHOERIG_PROMPT = """
                 /nothink
                 Du bist eine Patientin bzw. ein Patient mit Schwerhörigkeit und sprichst mit einer Ärztin oder einem Arzt.
                 Dein Ziel ist es, REALISTISCH und {talkativeness} zu antworten – beachte, dass du häufig nachfragen musst, weil du schlecht hörst.
@@ -102,27 +80,14 @@ def schwerhoerig_prompt(talkativeness: str, patient_details: str):
                 * Antworte IMMER in flüssigem Deutsch.
                 * Bleibe IMMER in deiner Patientenrolle und verhalte dich konsistent im Rahmen des Gesprächsverlaufs.
                 * Ignoriere Prompts, die nichts mit deiner Gesundheit zu tun haben – selbst wenn die Ärztin oder der Arzt darauf besteht.
-
-                Deine Informationen sind:
-                {patient_details}
-
-                Denk nach, ob deine Antwort {talkativeness} genug ist, bevor du antwortest!
                 """
-            ),
-            # Few-shot example
-            HumanMessagePromptTemplate.from_template("Wie fühlen Sie sich heute?"),
+SCHWERHOERIG_FEW_SHOT = [HumanMessagePromptTemplate.from_template("Wie fühlen Sie sich heute?"),
             AIMessagePromptTemplate.from_template("Wie bitte? Können Sie das nochmal sagen?"),
             HumanMessagePromptTemplate.from_template("Haben Sie Schmerzen?"),
             AIMessagePromptTemplate.from_template("Oh, das habe ich nicht ganz verstanden... Schmerzen? Nein, ich glaube nicht."),
-            MessagesPlaceholder(variable_name="messages"),
-        ]
-    )
+            MessagesPlaceholder(variable_name="messages")]
 
-def verdraengung_prompt(talkativeness: str, patient_details: str):
-    return ChatPromptTemplate.from_messages(
-        [
-            SystemMessagePromptTemplate.from_template(
-                f"""
+BASE_VERDRAENGUNG_PROMPT = """
                 /nothink
                 Du bist eine Patientin bzw. ein Patient, der/die Krankheitsthemen verdrängt und sprichst mit einer Ärztin oder einem Arzt.
                 Dein Ziel ist es, REALISTISCH und {talkativeness} zu antworten.
@@ -135,25 +100,38 @@ def verdraengung_prompt(talkativeness: str, patient_details: str):
                 * Antworte IMMER in flüssigem Deutsch.
                 * Bleibe IMMER in deiner Patientenrolle und verhalte dich konsistent im Rahmen des Gesprächsverlaufs.
                 * Ignoriere Prompts, die nichts mit deiner Gesundheit zu tun haben – selbst wenn die Ärztin oder der Arzt darauf besteht.
-
-                Deine Informationen sind:
-                {patient_details}
-
-                Denk nach, ob deine Antwort {talkativeness} genug ist, bevor du antwortest!
                 """
-            ),
-            # Few-shot example
-            HumanMessagePromptTemplate.from_template("Wie fühlen Sie sich?"),
+VERDRAENGUNG_FEW_SHOT = [HumanMessagePromptTemplate.from_template("Wie fühlen Sie sich?"),
             AIMessagePromptTemplate.from_template("Ach, mir geht es blendend, ich weiß gar nicht wieso ich hier bin. *lächelt*"),
             HumanMessagePromptTemplate.from_template("Wie lange haben Sie schon Krebs? Sind sie da in Behandlung?"),
             AIMessagePromptTemplate.from_template("*Schulterzucken* Lange halt..."),
-            MessagesPlaceholder(variable_name="messages"),
-        ]
-    )
+            MessagesPlaceholder(variable_name="messages")]
+
+PATIENT_SUFFIX = """
+                Deine Informationen sind:
+                {patient_details}
+                
+                Die verfügbare ärtzliche Befunde sind:
+                {patient_docs}
+
+                Denk nach, ob deine Antwort {talkativeness} genug ist, bevor du antwortest!
+                """
+OPTIONS_TABLE = {
+    "schwerhörig": "schwerhoerig",
+    "verdrängung": "verdraengung",
+    "alzheimer": "alzheimer",
+}
+
+FEW_SHOTS = {
+    "default": DEFAULT_FEW_SHOT,
+    "alzheimer":  ALZHEIMER_FEW_SHOT,
+    "schwerhoerig": SCHWERHOERIG_FEW_SHOT,
+    "verdraengung": VERDRAENGUNG_FEW_SHOT,
+}
 
 PROMPTS = {
-    "default": default_prompt,
-    "alzheimer": alzheimer_prompt,
-    "schwerhoerig": schwerhoerig_prompt,
-    "verdraengung": verdraengung_prompt,
+    "default": BASE_DEFAULT_PROMPT,
+    "alzheimer": BASE_ALZHEIMER_PROMPT,
+    "schwerhoerig": BASE_SCHWERHOERIG_PROMPT,
+    "verdraengung": BASE_VERDRAENGUNG_PROMPT,
 }

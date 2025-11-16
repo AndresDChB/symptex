@@ -4,6 +4,8 @@ from langchain_core.messages import HumanMessage, AIMessage
 from pydantic import BaseModel
 import logging
 from typing import AsyncGenerator
+
+from app.routers.uitls.pdf_utils import anamdoc_to_dict
 from chains.chat_chain import symptex_model
 from chains.eval_chain import eval_history
 from chains.formatting import format_patient_details
@@ -58,9 +60,12 @@ async def chat_with_llm(request: ChatRequest, db: Session = Depends(get_db)):
         return PlainTextResponse("Patient not found", status_code=404)
     patient_details = format_patient_details(patient_file)
 
-    patient_doc_md = db.query(AnamDoc).filter(AnamDoc.patient_file_id == patient_file.id).all()
-    #todo format patient docs update prompt, check that the LLM is aware of the new context
-    
+    patient_doc_rows = db.query(AnamDoc).filter(AnamDoc.patient_file_id == patient_file.id).all()
+    patient_doc_md = [anamdoc_to_dict(row) for row in patient_doc_rows]
+
+    print(f"Patient metadata: {patient_doc_md}")
+
+    #check that the LLM is aware of the new context
     # Create or get chat session
     session = db.query(ChatSession).filter(
         ChatSession.id == request.session_id
@@ -193,7 +198,7 @@ async def stream_response(
     condition: str, 
     talkativeness: str, 
     patient_details: str,
-    patient_doc_md: str,
+    patient_doc_md: list[dict],
     session_id: str,
     previous_messages: list
 ) -> AsyncGenerator[str, None]:
@@ -206,6 +211,7 @@ async def stream_response(
         condition (str): The medical condition to simulate.
         talkativeness (str): The level of talkativeness for the response.
         patient_details (str): Details about the patient.
+        patient_doc_md (list[dict]): Metadata of patient documents.
         session_id (str): The ID of the chat session.
         previous_messages (list): A list of previous messages in the chat.
 
