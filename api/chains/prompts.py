@@ -4,7 +4,7 @@ from langchain_core.prompts import MessagesPlaceholder
 from pyexpat.errors import messages
 
 
-def get_prompt(patient_condition: str, talkativeness: str, patient_details: str, patient_docs: str) -> ChatPromptTemplate:
+def get_prompt(patient_condition: str, talkativeness: str, patient_details: str, patient_docs: list[dict]) -> ChatPromptTemplate:
     """
     Returns the appropriate prompt template based on the patient's condition and talkativeness.
     """
@@ -12,18 +12,27 @@ def get_prompt(patient_condition: str, talkativeness: str, patient_details: str,
     option = OPTIONS_TABLE.get(patient_condition, "default")
     return build_system_prompt(PROMPTS[option], FEW_SHOTS[option], talkativeness, patient_details, patient_docs)
 
-
+#todo test prompt out, goal -> make LLM aware of the existence and type of each doc.
 #todo add tool to get pdfs and connect to frontend
 
-def build_system_prompt(base_prompt: str, few_shot_msgs : list, talkativeness: str, patient_details: str, patient_docs: str):
+def build_system_prompt(base_prompt: str, few_shot_msgs : list, talkativeness: str, patient_details: str, patient_docs: list[dict]):
     full_instructions = base_prompt + "\n\n" + PATIENT_SUFFIX
     initial_messages = [full_instructions]
     initial_messages.extend(few_shot_msgs)
+    formatted_patient_docs = format_patient_docs(patient_docs)
     return ChatPromptTemplate.from_messages(initial_messages).partial(
         talkativeness=talkativeness,
         patient_details=patient_details,
-        patient_docs=patient_docs,
+        patient_docs=formatted_patient_docs,
     )
+
+def format_patient_docs(patient_docs: list[dict]):
+    form_patient_docs = patient_docs.copy()
+    for doc in form_patient_docs:
+        del doc['id']
+        del doc['file_path']
+        del doc['patient_file_id']
+    return form_patient_docs
 
 BASE_DEFAULT_PROMPT = """
                 /nothink

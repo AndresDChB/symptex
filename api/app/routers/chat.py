@@ -5,7 +5,7 @@ from pydantic import BaseModel
 import logging
 from typing import AsyncGenerator
 
-from app.routers.uitls.pdf_utils import anamdoc_to_dict
+from app.utils import anamdoc_to_dict
 from chains.chat_chain import symptex_model
 from chains.eval_chain import eval_history
 from chains.formatting import format_patient_details
