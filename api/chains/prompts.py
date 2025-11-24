@@ -1,7 +1,5 @@
 from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, AIMessagePromptTemplate
-from langchain_core.prompts.chat import SystemMessagePromptTemplate
 from langchain_core.prompts import MessagesPlaceholder
-from pyexpat.errors import messages
 
 
 def get_prompt(patient_condition: str, talkativeness: str, patient_details: str, patient_docs: list[dict]) -> ChatPromptTemplate:
@@ -13,7 +11,6 @@ def get_prompt(patient_condition: str, talkativeness: str, patient_details: str,
     return build_system_prompt(PROMPTS[option], FEW_SHOTS[option], talkativeness, patient_details, patient_docs)
 
 #todo test prompt out, goal -> make LLM aware of the existence and type of each doc.
-#todo add tool to get pdfs and connect to frontend
 
 def build_system_prompt(base_prompt: str, few_shot_msgs : list, talkativeness: str, patient_details: str, patient_docs: list[dict]):
     full_instructions = base_prompt + "\n\n" + PATIENT_SUFFIX
@@ -120,7 +117,7 @@ PATIENT_SUFFIX = """
                 Deine Informationen sind:
                 {patient_details}
                 
-                Die verfügbare ärtzliche Befunde sind:
+                Die verfügbare ärztliche Befunde sind:
                 {patient_docs}
 
                 Denk nach, ob deine Antwort {talkativeness} genug ist, bevor du antwortest!

@@ -1,18 +1,18 @@
+import logging
+from typing import AsyncGenerator
+
 from fastapi import (APIRouter, Depends)
 from fastapi.responses import StreamingResponse, PlainTextResponse
 from langchain_core.messages import HumanMessage, AIMessage
 from pydantic import BaseModel
-import logging
-from typing import AsyncGenerator
-
-from app.utils import anamdoc_to_dict
-from chains.chat_chain import symptex_model
-from chains.eval_chain import eval_history
-from chains.formatting import format_patient_details
+from sqlalchemy.orm import Session
 
 from app.db.db import get_db
-from sqlalchemy.orm import Session
 from app.db.models import ChatSession, ChatMessage, PatientFile, AnamDoc
+from app.utils.pdf_utils import anamdoc_to_dict
+from chains.chat_chain import build_symptex_model
+from chains.eval_chain import eval_history
+from chains.formatting import format_patient_details
 
 # Set up logging
 logger = logging.getLogger('uvicorn.error')
@@ -119,6 +119,7 @@ async def chat_with_llm(request: ChatRequest, db: Session = Depends(get_db)):
                     session_id=request.session_id,
                     previous_messages=messages
                 ):
+                    #todo extend with custom chatevent to distinguish between text chunk or state
                     llm_response += chunk
                     yield chunk
                 
@@ -220,22 +221,31 @@ async def stream_response(
     """
     logger.debug("Starting to stream response for message: %s", message)
 
+    initial_state = {
+        "messages": previous_messages + [HumanMessage(message)],
+        "model": model,
+        "condition": condition,
+        "talkativeness": talkativeness,
+        "patient_details": patient_details,
+        "patient_doc_md": patient_doc_md,
+    }
+    symptex_model = build_symptex_model(initial_state)
     try:
-        async for msg, metadata in symptex_model.astream(
-            {
-                "messages": previous_messages + [HumanMessage(message)],
-                "model": model,
-                "condition": condition,
-                "talkativeness": talkativeness,
-                "patient_details": patient_details,
-                "patient_doc_md": patient_doc_md,
-            },
-            stream_mode="messages"
+        async for mode, chunk in symptex_model.astream(
+            initial_state,
+            stream_mode=["messages", "values"],
         ):
-            # Get AIMessageChunks only
-            if msg.content and not isinstance(msg, HumanMessage):
-                # logger.debug(msg.content)
-                yield msg.content
+            if mode == "messages":
+                #todo remove thinking steps
+                #todo debug duplicated messages bug
+                msg, metadata = chunk
+                if msg.content and not isinstance(msg, HumanMessage):
+                    yield msg.content
+
+            elif mode == "values":
+                # full graph state after this step
+                final_state = chunk
+                #todo test if tool is working then handle this
     except Exception as e:
         logger.error("Error while streaming response: %s", str(e))
         yield f"Entschuldigung, es ist ein Fehler aufgetreten: {str(e)}"
