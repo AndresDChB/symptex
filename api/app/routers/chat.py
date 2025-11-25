@@ -63,6 +63,7 @@ async def chat_with_llm(request: ChatRequest, db: Session = Depends(get_db)):
     patient_doc_rows = db.query(AnamDoc).filter(AnamDoc.patient_file_id == patient_file.id).all()
     patient_doc_md = [anamdoc_to_dict(row) for row in patient_doc_rows]
 
+    #todo remove this
     print(f"Patient metadata: {patient_doc_md}")
 
     #check that the LLM is aware of the new context
@@ -109,6 +110,7 @@ async def chat_with_llm(request: ChatRequest, db: Session = Depends(get_db)):
             nonlocal llm_response
             try:
                 messages = previous_messages + [HumanMessage(content=request.message)]
+                logger.info(f"Messages: {messages}")
                 async for chunk in stream_response(
                     message=request.message,
                     model=request.model,
@@ -229,6 +231,9 @@ async def stream_response(
         "patient_details": patient_details,
         "patient_doc_md": patient_doc_md,
     }
+    #todo remove this
+    logger.info("Initial state: %s", initial_state)
+    #todo initial state has two human messages, remove one
     symptex_model = build_symptex_model(initial_state)
     try:
         async for mode, chunk in symptex_model.astream(
@@ -236,7 +241,7 @@ async def stream_response(
             stream_mode=["messages", "values"],
         ):
             if mode == "messages":
-                #todo remove thinking steps
+                #todo figure out why even with /nothink the thing is thinking
                 #todo debug duplicated messages bug
                 msg, metadata = chunk
                 if msg.content and not isinstance(msg, HumanMessage):

@@ -1,10 +1,11 @@
+import base64
+import logging
+import re
+import uuid
+from pathlib import Path
+
 import requests
 import streamlit as st
-import logging
-import uuid
-import base64
-from pathlib import Path
-import re
 
 # Constants
 API_URL = "http://host.docker.internal:8000/api/v1"
@@ -212,7 +213,10 @@ def main() -> None:
 
         with st.spinner("Denkt nach..."):
             response_placeholder = st.chat_message("assistant").markdown("")
+            # todo remove this
+            logger.info("Calling LLM lmao lmao yeah")
             with requests.post(API_URL + "/chat", json=data, stream=True) as response:
+
                 if response.status_code == 200:
                     streamed_text = process_llm_response(response, response_placeholder)
                     st.session_state.messages.append({
