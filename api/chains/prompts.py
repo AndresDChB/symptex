@@ -1,4 +1,5 @@
-from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, AIMessagePromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, AIMessagePromptTemplate, \
+    SystemMessagePromptTemplate
 from langchain_core.prompts import MessagesPlaceholder
 
 
@@ -14,7 +15,7 @@ def get_prompt(patient_condition: str, talkativeness: str, patient_details: str,
 
 def build_system_prompt(base_prompt: str, few_shot_msgs : list, talkativeness: str, patient_details: str, patient_docs: list[dict]):
     full_instructions = base_prompt + "\n\n" + PATIENT_SUFFIX
-    initial_messages = [full_instructions]
+    initial_messages = [SystemMessagePromptTemplate.from_template(full_instructions)]
     initial_messages.extend(few_shot_msgs)
     formatted_patient_docs = format_patient_docs(patient_docs)
     return ChatPromptTemplate.from_messages(initial_messages).partial(

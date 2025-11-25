@@ -110,9 +110,7 @@ async def chat_with_llm(request: ChatRequest, db: Session = Depends(get_db)):
             nonlocal llm_response
             try:
                 messages = previous_messages + [HumanMessage(content=request.message)]
-                logger.info(f"Messages: {messages}")
                 async for chunk in stream_response(
-                    message=request.message,
                     model=request.model,
                     condition=request.condition,
                     talkativeness=request.talkativeness,
@@ -196,7 +194,6 @@ async def eval_chat(request: RateRequest):
 
 
 async def stream_response(
-    message: str, 
     model: str, 
     condition: str, 
     talkativeness: str, 
@@ -221,10 +218,9 @@ async def stream_response(
     Returns:
         str: The response message from the LLM.
     """
-    logger.debug("Starting to stream response for message: %s", message)
 
     initial_state = {
-        "messages": previous_messages + [HumanMessage(message)],
+        "messages": previous_messages,
         "model": model,
         "condition": condition,
         "talkativeness": talkativeness,

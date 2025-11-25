@@ -94,8 +94,9 @@ async def patient_model_final(state: CustomState) -> CustomState:
     model = state["model"]
     llm = get_llm(model)  # can be with or without tools now
 
-    logger.debug("Calling final patient model %s", model)
+    logger.info("Calling final patient model %s", model)
     # just pass message history
+    #todo this is making the response stream twice
     response = await llm.ainvoke(state["messages"])
 
     state["messages"] = add_messages(state["messages"], [response])

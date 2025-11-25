@@ -27,7 +27,7 @@ def build_symptex_model(initial_state: CustomState):
         {
             "abort": END,
             "has_tool_calls": "load_docs",
-            "no_tool_calls": "patient_model_final",
+            "no_tool_calls": END,
         },
     )
     workflow.add_edge("load_docs", "patient_model_final")
