@@ -229,7 +229,6 @@ async def stream_response(
     }
     #todo remove this
     logger.info("Initial state: %s", initial_state)
-    #todo initial state has two human messages, remove one
     symptex_model = build_symptex_model(initial_state)
     try:
         async for mode, chunk in symptex_model.astream(
@@ -238,7 +237,6 @@ async def stream_response(
         ):
             if mode == "messages":
                 #todo figure out why even with /nothink the thing is thinking
-                #todo debug duplicated messages bug
                 msg, metadata = chunk
                 if msg.content and not isinstance(msg, HumanMessage):
                     yield msg.content
@@ -246,6 +244,7 @@ async def stream_response(
             elif mode == "values":
                 # full graph state after this step
                 final_state = chunk
+                print(final_state)
                 #todo test if tool is working then handle this
     except Exception as e:
         logger.error("Error while streaming response: %s", str(e))

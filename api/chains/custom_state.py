@@ -15,3 +15,4 @@ class CustomState(TypedDict):
     tool_calls: list
     attach_docs: bool
     hard_error: bool
+    docs_summary: str

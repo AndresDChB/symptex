@@ -120,9 +120,18 @@ PATIENT_SUFFIX = """
                 
                 Die verfügbare ärztliche Befunde sind:
                 {patient_docs}
+                
+                Auszüge aus diesen Befunden (falls verfügbar):
+                {docs_summary}
+                
+                Wenn {patient_docs} nicht leer ist, weißt du, dass es Befunde gibt. 
+                Wenn {docs_summary} nicht leer ist, nutze den Inhalt in einfacher Alltagssprache, 
+                um auf die letzte Frage der Ärztin oder des Arztes zu antworten – immer im Rahmen deiner Rolle 
+                und ohne Fachbegriffe oder Diagnosen zu verwenden.
 
                 Denk nach, ob deine Antwort {talkativeness} genug ist, bevor du antwortest!
                 """
+
 OPTIONS_TABLE = {
     "schwerhörig": "schwerhoerig",
     "verdrängung": "verdraengung",
