@@ -16,7 +16,10 @@ from chains.formatting import format_patient_details
 
 # Set up logging
 logger = logging.getLogger('uvicorn.error')
-logger.setLevel(logging.DEBUG)
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s [%(levelname)s] %(filename)s:%(lineno)d %(funcName)s() - %(message)s",
+)
 
 router = APIRouter()
 
@@ -230,6 +233,7 @@ async def stream_response(
     #todo remove this
     logger.info("Initial state: %s", initial_state)
     symptex_model = build_symptex_model(initial_state)
+    logger.info("Symptex model built")
     try:
         async for mode, chunk in symptex_model.astream(
             initial_state,

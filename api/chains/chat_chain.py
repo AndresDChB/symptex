@@ -7,12 +7,12 @@ from chains.chain_tools import make_load_patient_files_tool
 from chains.custom_state import CustomState
 
 # Set up logging
-logger = logging.getLogger('chat_chain')
+logger = logging.getLogger('uvicorn.error')
 logger.setLevel(logging.DEBUG)
 #todo consider adding ls.traceable to LLM-calling nodes
 
 def build_symptex_model(initial_state: CustomState):
-
+    logger.info("Building symptex model")
     workflow = StateGraph(state_schema=CustomState)
 
     load_patient_docs_tool = make_load_patient_files_tool(extract_file_path(initial_state["patient_doc_md"]))

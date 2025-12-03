@@ -9,7 +9,7 @@ import chains.prompts.patient_prompts as patient_prompts
 from chains.custom_state import CustomState
 from chains.llm import get_llm
 
-logger = logging.getLogger('chain_nodes')
+logger = logging.getLogger('uvicorn.error')
 logger.setLevel(logging.DEBUG)
 def make_load_docs_node(load_patient_docs_tool):
     async def load_docs_node(state: CustomState) -> CustomState:
@@ -56,8 +56,9 @@ def make_orchestrator_node(tool_list: list):
     async def orchestrator_node(state: CustomState) -> CustomState:
         model = state["model"]
         prompt = orchestrator_prompts.get_prompt()
-
+        logger.info("Starting orchestrator node execution")
         llm_with_tools = get_llm(model).bind_tools(tool_list)
+        logger.info("Tools bound to orchestrator")
         chain = prompt | llm_with_tools
 
         try:
@@ -109,7 +110,7 @@ async def patient_model_final(state: CustomState) -> CustomState:
     patient_details = state["patient_details"]
     patient_doc_md = state.get("patient_doc_md", [])
     llm = get_llm(model)
-
+    #todo add docs_summary
     logger.info("Calling final patient model %s", model)
     # todo instead of this you could just leave the variables in the prompt empty and let chain.invoke() handle that
     prompt = patient_prompts.get_prompt(condition, talkativeness, patient_details, patient_doc_md)

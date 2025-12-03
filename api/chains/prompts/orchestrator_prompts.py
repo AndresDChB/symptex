@@ -1,7 +1,9 @@
-from langchain_core.prompts import SystemMessagePromptTemplate, MessagesPlaceholder
+from langchain_core.prompts import SystemMessagePromptTemplate, MessagesPlaceholder, ChatPromptTemplate
 
+
+#todo this is causing the errors
 def get_prompt():
-    return [
+    return ChatPromptTemplate.from_messages([
     SystemMessagePromptTemplate.from_template(
     """
     You are the Orchestrator Assistant in a doctor–patient simulation where a separate LLM simulates the patient and the user simulates the doctor.
@@ -22,4 +24,4 @@ def get_prompt():
     - Do not speak in the voice of the patient.
     - Do not generate conversational dialogue.
     """),
-    MessagesPlaceholder(variable_name="messages"),]
+    MessagesPlaceholder(variable_name="messages"),])
