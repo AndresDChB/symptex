@@ -16,7 +16,9 @@ def get_prompt(patient_condition: str, talkativeness: str, patient_details: str,
 def build_system_prompt(base_prompt: str, few_shot_msgs : list, talkativeness: str, patient_details: str, patient_docs: list[dict], docs_summary: str):
     full_instructions = base_prompt + "\n\n" + PATIENT_SUFFIX
     initial_messages = [SystemMessagePromptTemplate.from_template(full_instructions)]
+    initial_messages.extend([SystemMessagePromptTemplate.from_template("Example interaction begin:")])
     initial_messages.extend(few_shot_msgs)
+    initial_messages.extend([SystemMessagePromptTemplate.from_template("Example interaction end. Actual messages begin from here:")])
     formatted_patient_docs = format_patient_docs(patient_docs)
     return ChatPromptTemplate.from_messages(initial_messages).partial(
         talkativeness=talkativeness,

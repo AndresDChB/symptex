@@ -124,6 +124,8 @@ async def patient_model_final(state: CustomState) -> CustomState:
     response = await chain.ainvoke(state)
 
     state["messages"] = add_messages(state["messages"], [response])
+    logger.debug("Final LLM call succeeded")
+    logger.info("state: %s", state)
     return state
 
 
