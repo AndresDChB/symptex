@@ -3,17 +3,17 @@ from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplat
 from langchain_core.prompts import MessagesPlaceholder
 
 
-def get_prompt(patient_condition: str, talkativeness: str, patient_details: str, patient_docs: list[dict]) -> ChatPromptTemplate:
+def get_prompt(patient_condition: str, talkativeness: str, patient_details: str, patient_docs: list[dict], docs_summary) -> ChatPromptTemplate:
     """
     Returns the appropriate prompt template based on the patient's condition and talkativeness.
     """
 
     option = OPTIONS_TABLE.get(patient_condition, "default")
-    return build_system_prompt(PROMPTS[option], FEW_SHOTS[option], talkativeness, patient_details, patient_docs)
+    return build_system_prompt(PROMPTS[option], FEW_SHOTS[option], talkativeness, patient_details, patient_docs, docs_summary)
 
 #todo test prompt out, goal -> make LLM aware of the existence and type of each doc.
 
-def build_system_prompt(base_prompt: str, few_shot_msgs : list, talkativeness: str, patient_details: str, patient_docs: list[dict]):
+def build_system_prompt(base_prompt: str, few_shot_msgs : list, talkativeness: str, patient_details: str, patient_docs: list[dict], docs_summary: str):
     full_instructions = base_prompt + "\n\n" + PATIENT_SUFFIX
     initial_messages = [SystemMessagePromptTemplate.from_template(full_instructions)]
     initial_messages.extend(few_shot_msgs)
@@ -22,6 +22,7 @@ def build_system_prompt(base_prompt: str, few_shot_msgs : list, talkativeness: s
         talkativeness=talkativeness,
         patient_details=patient_details,
         patient_docs=formatted_patient_docs,
+        docs_summary=docs_summary,
     )
 
 def format_patient_docs(patient_docs: list[dict]):
@@ -124,8 +125,8 @@ PATIENT_SUFFIX = """
                 Auszüge aus diesen Befunden (falls verfügbar):
                 {docs_summary}
                 
-                Wenn {patient_docs} nicht leer ist, weißt du, dass es Befunde gibt. 
-                Wenn {docs_summary} nicht leer ist, nutze den Inhalt in einfacher Alltagssprache, 
+                Wenn du ärztliche befunde sehen kannst, weißt du, dass es Befunde gibt. 
+                Wenn die Auszüge nicht leer sind, nutze den Inhalt in einfacher Alltagssprache, 
                 um auf die letzte Frage der Ärztin oder des Arztes zu antworten – immer im Rahmen deiner Rolle 
                 und ohne Fachbegriffe oder Diagnosen zu verwenden.
 

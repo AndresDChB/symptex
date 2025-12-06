@@ -1,4 +1,5 @@
 import logging
+import re
 import traceback
 
 from langchain_core.messages import ToolMessage
@@ -11,6 +12,10 @@ from chains.llm import get_llm
 
 logger = logging.getLogger('uvicorn.error')
 logger.setLevel(logging.DEBUG)
+
+def strip_think_tags(text: str) -> str:
+    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+
 def make_load_docs_node(load_patient_docs_tool):
     async def load_docs_node(state: CustomState) -> CustomState:
         tool_calls = state.get("tool_calls", []) or []
@@ -73,7 +78,7 @@ def make_orchestrator_node(tool_list: list):
                 return state
 
             content = getattr(response, "content", "") or ""
-            stripped = content.strip()
+            stripped = strip_think_tags(content).strip()
 
             if stripped == "NO_TOOL":
                 logger.debug("Orchestrator returned NO_TOOL (no-op).")
@@ -88,7 +93,7 @@ def make_orchestrator_node(tool_list: list):
             return state
 
         except Exception as e:
-            logger.error("Error in patient_model_initial: %s", e)
+            logger.error("Error in orchestrator_node: %s", e)
             logger.error("Traceback:\n%s", traceback.format_exc())
             fallback = {
                 "role": "ai",
@@ -109,11 +114,11 @@ async def patient_model_final(state: CustomState) -> CustomState:
     talkativeness = state["talkativeness"]
     patient_details = state["patient_details"]
     patient_doc_md = state.get("patient_doc_md", [])
+    docs_summary = state.get("docs_summary", [])
     llm = get_llm(model)
-    #todo add docs_summary
     logger.info("Calling final patient model %s", model)
     # todo instead of this you could just leave the variables in the prompt empty and let chain.invoke() handle that
-    prompt = patient_prompts.get_prompt(condition, talkativeness, patient_details, patient_doc_md)
+    prompt = patient_prompts.get_prompt(condition, talkativeness, patient_details, patient_doc_md, docs_summary)
 
     chain = prompt | llm
     response = await chain.ainvoke(state)

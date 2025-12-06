@@ -248,6 +248,7 @@ async def stream_response(
             elif mode == "values":
                 # full graph state after this step
                 final_state = chunk
+                print("State:")
                 print(final_state)
                 #todo test if tool is working then handle this
     except Exception as e:
