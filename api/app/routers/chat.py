@@ -1,4 +1,6 @@
+import json
 import logging
+import os
 from typing import AsyncGenerator
 
 from fastapi import (APIRouter, Depends)
@@ -9,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.db.db import get_db
 from app.db.models import ChatSession, ChatMessage, PatientFile, AnamDoc
-from app.utils.pdf_utils import anamdoc_to_dict
+from app.utils.pdf_utils import anamdoc_to_dict, load_pdfs_as_base64
 from chains.chat_chain import build_symptex_model
 from chains.eval_chain import eval_history
 from chains.formatting import format_patient_details
@@ -20,9 +22,10 @@ logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s [%(levelname)s] %(filename)s:%(lineno)d %(funcName)s() - %(message)s",
 )
-
+container_dir = os.environ["ANAMNESIS_DIR"]
 router = APIRouter()
 
+TARGET_NODE = "patient_model_final"
 
 # Chat request schema
 class ChatRequest(BaseModel):
@@ -66,10 +69,6 @@ async def chat_with_llm(request: ChatRequest, db: Session = Depends(get_db)):
     patient_doc_rows = db.query(AnamDoc).filter(AnamDoc.patient_file_id == patient_file.id).all()
     patient_doc_md = [anamdoc_to_dict(row) for row in patient_doc_rows]
 
-    #todo remove this
-    print(f"Patient metadata: {patient_doc_md}")
-
-    #check that the LLM is aware of the new context
     # Create or get chat session
     session = db.query(ChatSession).filter(
         ChatSession.id == request.session_id
@@ -111,8 +110,10 @@ async def chat_with_llm(request: ChatRequest, db: Session = Depends(get_db)):
         # Stream response and store LLM message
         async def generate_and_store():
             nonlocal llm_response
+            attach_docs_flag = {"value": False}
             try:
                 messages = previous_messages + [HumanMessage(content=request.message)]
+                logger.info("Beginning text streaming")
                 async for chunk in stream_response(
                     model=request.model,
                     condition=request.condition,
@@ -120,12 +121,29 @@ async def chat_with_llm(request: ChatRequest, db: Session = Depends(get_db)):
                     patient_details=patient_details,
                     patient_doc_md = patient_doc_md,
                     session_id=request.session_id,
-                    previous_messages=messages
+                    previous_messages=messages,
+                    attach_docs_flag=attach_docs_flag,
                 ):
-                    #todo extend with custom chatevent to distinguish between text chunk or state
                     llm_response += chunk
                     yield chunk
-                
+                logger.info("Text streaming ended")
+                logger.info("Attach docs: %s", attach_docs_flag)
+                if attach_docs_flag.get("value"):
+                    logger.info("Attaching docs")
+                    file_paths = []
+                    for doc in patient_doc_md:
+                        file_paths.append(container_dir + doc["file_path"])
+                    logger.info("File paths: {}".format(file_paths))
+                    docs = load_pdfs_as_base64(file_paths)
+                    logger.info("Loaded docs {}".format(docs))
+                    docs_event = {
+                        "event": "attach_docs",
+                        "docs": docs,
+                    }
+
+                    # final chunk: JSON with PDF contents
+                    # prepend newline so it's separated from previous plain text if needed
+                    yield "\n" + json.dumps(docs_event)
                 # After streaming is complete, store LLM message
                 llm_message = ChatMessage(
                     session_id=session.id,
@@ -203,13 +221,13 @@ async def stream_response(
     patient_details: str,
     patient_doc_md: list[dict],
     session_id: str,
-    previous_messages: list
+    previous_messages: list,
+    attach_docs_flag: dict | None = None,
 ) -> AsyncGenerator[str, None]:
     """
     Stream responses from the symptex_model.
 
     Args:
-        message (str): The input message from the user.
         model (str): The model to use for generating the response.
         condition (str): The medical condition to simulate.
         talkativeness (str): The level of talkativeness for the response.
@@ -217,6 +235,7 @@ async def stream_response(
         patient_doc_md (list[dict]): Metadata of patient documents.
         session_id (str): The ID of the chat session.
         previous_messages (list): A list of previous messages in the chat.
+        attach_docs_flag: flag to send Vorbefunde to the frontend
 
     Returns:
         str: The response message from the LLM.
@@ -230,27 +249,28 @@ async def stream_response(
         "patient_details": patient_details,
         "patient_doc_md": patient_doc_md,
     }
-    #todo remove this
-    logger.info("Initial state: %s", initial_state)
     symptex_model = build_symptex_model(initial_state)
-    logger.info("Symptex model built")
     try:
         async for mode, chunk in symptex_model.astream(
             initial_state,
             stream_mode=["messages", "values"],
         ):
             if mode == "messages":
-                #todo figure out why even with /nothink the thing is thinking
                 msg, metadata = chunk
-                if msg.content and not isinstance(msg, HumanMessage):
-                    yield msg.content
+                node_name = metadata.get("langgraph_node")
 
+                if (
+                    node_name == TARGET_NODE
+                    and msg.content
+                    and not isinstance(msg, HumanMessage)
+                ):
+                    yield msg.content
             elif mode == "values":
-                # full graph state after this step
-                final_state = chunk
-                print("State:")
-                print(final_state)
-                #todo test if tool is working then handle this
+                state = chunk
+                print("State: ", state)
+                if attach_docs_flag is not None and state.get("attach_docs"):
+                    print("Setting attach_docs to True")
+                    attach_docs_flag["value"] = True
     except Exception as e:
         logger.error("Error while streaming response: %s", str(e))
         yield f"Entschuldigung, es ist ein Fehler aufgetreten: {str(e)}"

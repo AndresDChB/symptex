@@ -9,11 +9,16 @@ services:
   symptex:
     build:
       context: ./api
+    env_file:
+      - .env
     ports:
       - "8000:8000"
     restart: always
     environment:
       - DATABASE_URL=postgresql://ilvi:ilvi@postgres:5432/ilvi
+      - ANAMNESIS_DIR=/anamnesis_files
+    volumes:
+      - "${HOST_ANAMNESIS_PATH}:/anamnesis_files"
     networks:
       - ilvi-api_default
 

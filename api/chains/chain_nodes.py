@@ -9,6 +9,7 @@ import chains.prompts.orchestrator_prompts as orchestrator_prompts
 import chains.prompts.patient_prompts as patient_prompts
 from chains.custom_state import CustomState
 from chains.llm import get_llm
+from chains.prompts import summarizer_prompts
 
 logger = logging.getLogger('uvicorn.error')
 logger.setLevel(logging.DEBUG)
@@ -29,13 +30,9 @@ def make_load_docs_node(load_patient_docs_tool):
                 logger.warning("Unknown tool called: %s", tc.get("name"))
                 continue
 
-            patient_doc_md = state.get("patient_doc_md")
-            file_paths = []
 
-            for patient_doc in patient_doc_md:
-                file_paths.append(patient_doc.get("file_path"))
             try:
-                tool_output_text = load_patient_docs_tool.invoke({})
+                tool_output_text = await load_patient_docs_tool.ainvoke({})
             except Exception as e:
                 logger.exception("Error running load_patient_docs tool")
                 tool_output_text = f"[Error loading documents: {e}]"
@@ -85,9 +82,7 @@ def make_orchestrator_node(tool_list: list):
                 state["hard_error"] = False
                 return state
 
-            logger.debug("Orchestrator produced summary: %s", stripped)
-            state["docs_summary"] = stripped
-            state["attach_docs"] = True
+            logger.debug("Orchestrator output something other than a summary: %s", stripped)
             state["hard_error"] = False
 
             return state
@@ -108,25 +103,39 @@ def make_orchestrator_node(tool_list: list):
             return state
     return orchestrator_node
 
-async def patient_model_final(state: CustomState) -> CustomState:
+async def summary_node(state: CustomState) -> CustomState:
+    model = state["model"]
+    prompt = summarizer_prompts.get_prompt()
+    logger.info("Starting summarizer node execution")
+    logger.info("Tools bound to orchestrator")
+    llm = get_llm(model)
+    chain = prompt | llm
+    response = await chain.ainvoke(state)
+    stripped = strip_think_tags(response.content).strip()
+    state["messages"] = remove_tool_messages(state["messages"])
+    state["docs_summary"] = stripped
+    state["attach_docs"] = True
+    logger.debug("Summarizer state: %s",state)
+    return state
+
+async def patient_model_final(state: CustomState) -> dict:
     model = state["model"]
     condition = state["condition"]
     talkativeness = state["talkativeness"]
     patient_details = state["patient_details"]
     patient_doc_md = state.get("patient_doc_md", [])
-    docs_summary = state.get("docs_summary", [])
+    docs_summary = state.get("docs_summary", "")
     llm = get_llm(model)
     logger.info("Calling final patient model %s", model)
-    # todo instead of this you could just leave the variables in the prompt empty and let chain.invoke() handle that
+
     prompt = patient_prompts.get_prompt(condition, talkativeness, patient_details, patient_doc_md, docs_summary)
 
     chain = prompt | llm
     response = await chain.ainvoke(state)
 
-    state["messages"] = add_messages(state["messages"], [response])
-    logger.debug("Final LLM call succeeded")
-    logger.info("state: %s", state)
-    return state
+    return {
+        "messages": [response]
+    }
 
 
 def branching_node(state: CustomState) -> str:
@@ -135,3 +144,6 @@ def branching_node(state: CustomState) -> str:
         return "abort"
     tool_calls = state.get("tool_calls", []) or []
     return "has_tool_calls" if tool_calls else "no_tool_calls"
+
+def remove_tool_messages(messages):
+    return [m for m in messages if not isinstance(m, ToolMessage)]

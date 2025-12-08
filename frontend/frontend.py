@@ -1,4 +1,5 @@
 import base64
+import json
 import logging
 import re
 import uuid
@@ -147,37 +148,149 @@ def handle_chat_eval() -> None:
         logger.error(f"Error evaluating chat: {str(e)}")
         st.error(f"Fehler bei der Bewertung: {str(e)}")
 
-def process_llm_response(response: requests.Response, response_placeholder: st.delta_generator.DeltaGenerator) -> str:
-    """Process streaming response from LLM"""
+def process_llm_response(
+    response: requests.Response,
+    response_placeholder: st.delta_generator.DeltaGenerator,
+) -> tuple[str, list[dict]]:
+    """Process streaming response from LLM, strip <think> tags, and capture attach_docs event."""
     streamed_text = ""
     buffer = ""
     think_tags_removed = False
+    pdf_docs: list[dict] = []
 
     for chunk in response.iter_content(chunk_size=None):
-        chunk_text = chunk.decode()
-        buffer += chunk_text
-        
-        # Check for think tags
-        if not think_tags_removed and "<think>" in buffer:
-            # Wait for closing tag
-            if "</think>\n" in buffer:
-                # Remove tags
-                buffer = re.sub(r'^<think>[\s\S]*?</think>\n\n?', '', buffer)
-                think_tags_removed = True
-            else:
-                # Don't display anything yet, wait for closing tag
-                continue
-        
-        # Add processed text to stream
-        if think_tags_removed or not "<think>" in buffer:
-            streamed_text += buffer
-            buffer = ""
-            think_tags_removed = True if not think_tags_removed else think_tags_removed
+        buffer = _accumulate_chunk(buffer, chunk)
+        if not buffer:
+            continue
 
-        # Update display
+        buffer, think_tags_removed, waiting_for_think_end = _strip_think_tags_if_needed(
+            buffer, think_tags_removed
+        )
+        if waiting_for_think_end:
+            # we don't show anything until </think> is seen
+            continue
+
+        is_event, pdf_docs, buffer = _handle_json_event_if_any(buffer, pdf_docs)
+        if is_event:
+            # JSON events (like attach_docs) are not shown as text
+            continue
+
+        streamed_text, buffer, think_tags_removed = _consume_text_buffer(
+            buffer, streamed_text, think_tags_removed, response_placeholder
+        )
+
+    # Final render (without cursor, etc.)
+    response_placeholder.markdown(streamed_text)
+    return streamed_text, pdf_docs
+
+def render_vorbefunde_docs(pdf_docs):
+    if not pdf_docs:
+        return
+
+    # You can change this to whatever UI you like (expander, separate chat message, etc.)
+    with st.expander("📎 Vorbefunde (PDFs anzeigen)"):
+        for i, doc in enumerate(pdf_docs, start=1):
+            filename = doc.get("filename", f"vorbefund_{i}.pdf")
+            content_b64 = doc.get("content_b64", "")
+
+            if not content_b64:
+                continue
+
+            pdf_bytes = base64.b64decode(content_b64)
+
+            # Download button
+            st.download_button(
+                label=f"📄 {filename} herunterladen",
+                data=pdf_bytes,
+                file_name=filename,
+                mime="application/pdf",
+                key=f"download_{filename}_{i}",
+            )
+
+            # Optional inline viewer
+            pdf_display = f"""
+            <iframe src="data:application/pdf;base64,{content_b64}"
+                    width="700" height="900"
+                    type="application/pdf"></iframe>
+            """
+            st.markdown(pdf_display, unsafe_allow_html=True)
+
+def _accumulate_chunk(buffer: str, chunk: bytes) -> str:
+    if not chunk:
+        return buffer
+    return buffer + chunk.decode(errors="ignore")
+
+
+def _strip_think_tags_if_needed(
+    buffer: str, think_tags_removed: bool
+) -> tuple[str, bool, bool]:
+    """
+    Remove <think>...</think> block once, if present and complete.
+    Returns (new_buffer, think_tags_removed, waiting_for_closing_tag).
+    """
+    if think_tags_removed or "<think>" not in buffer:
+        return buffer, think_tags_removed, False
+
+    # Wait for closing tag before stripping
+    if "</think>\n" not in buffer:
+        # still waiting for the rest of the think block
+        return buffer, think_tags_removed, True
+
+    # Remove the <think>...</think>\n (and an optional extra newline)
+    buffer = re.sub(r'^<think>[\s\S]*?</think>\n\n?', '', buffer)
+    return buffer, True, False
+
+
+def _handle_json_event_if_any(
+    buffer: str, pdf_docs: list[dict]
+) -> tuple[bool, list[dict], str]:
+    """
+    Detect and handle JSON events in the buffer.
+    Returns (is_event, updated_pdf_docs, new_buffer).
+    """
+    stripped = buffer.strip()
+    if not (stripped.startswith("{") and stripped.endswith("}")):
+        return False, pdf_docs, buffer
+
+    try:
+        event = json.loads(stripped)
+    except json.JSONDecodeError:
+        # Not valid JSON → treat as normal text
+        return False, pdf_docs, buffer
+
+    # attach_docs event with PDFs from backend
+    if event.get("event") == "attach_docs":
+        pdf_docs = event.get("docs", [])
+        return True, pdf_docs, ""  # clear buffer
+
+    # Other events could be handled here in the future
+    return True, pdf_docs, ""  # event handled, but not shown as text
+
+
+def _consume_text_buffer(
+    buffer: str,
+    streamed_text: str,
+    think_tags_removed: bool,
+    response_placeholder: st.delta_generator.DeltaGenerator,
+) -> tuple[str, str, bool]:
+    """
+    Append current buffer to streamed_text (if appropriate) and update the UI.
+    Returns (new_streamed_text, new_buffer, new_think_tags_removed).
+    """
+    if not buffer:
+        return streamed_text, buffer, think_tags_removed
+
+    # Only display when either:
+    # - we've already removed think tags, or
+    # - there is no <think> at all in the remaining buffer.
+    if think_tags_removed or "<think>" not in buffer:
+        streamed_text += buffer
+        buffer = ""
+        if not think_tags_removed:
+            think_tags_removed = True
         response_placeholder.markdown(streamed_text)
-    
-    return streamed_text
+
+    return streamed_text, buffer, think_tags_removed
 
 def main() -> None:
     """Main application function"""
@@ -213,16 +326,20 @@ def main() -> None:
 
         with st.spinner("Denkt nach..."):
             response_placeholder = st.chat_message("assistant").markdown("")
-            # todo remove this
-            logger.info("Calling LLM lmao lmao yeah")
             with requests.post(API_URL + "/chat", json=data, stream=True) as response:
 
                 if response.status_code == 200:
-                    streamed_text = process_llm_response(response, response_placeholder)
+                    streamed_text, pdf_docs = process_llm_response(response, response_placeholder)
+
                     st.session_state.messages.append({
                         "role": "assistant",
                         "output": streamed_text,
+                        "docs": pdf_docs,
                     })
+
+                    # Optionally render the PDFs right away:
+                    if pdf_docs:
+                        render_vorbefunde_docs(pdf_docs)  # function from earlier answer
                 else:
                     st.error("An error occurred while processing your message.")
 

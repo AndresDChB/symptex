@@ -1,7 +1,5 @@
 from langchain_core.prompts import SystemMessagePromptTemplate, MessagesPlaceholder, ChatPromptTemplate
 
-
-#todo this is causing the errors
 def get_prompt():
     return ChatPromptTemplate.from_messages([
     SystemMessagePromptTemplate.from_template(
@@ -14,8 +12,7 @@ def get_prompt():
     - Your only purpose is to:
       1. Inspect the most recent doctor (user) message in the dialogue.
       2. Decide whether a tool should be called based on that message.
-      3. Follow the tool's instructions if it outputs them.
-      4. If no tool is applicable, simply produce the phrase: "NO_TOOL".
+      3. If no tool is applicable, simply produce the phrase: "NO_TOOL".
         
     Important constraints:
     - Your output should always be plain text.
