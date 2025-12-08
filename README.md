@@ -21,9 +21,12 @@ CHATAI_API_KEY=insert_api_key
 LANGCHAIN_TRACING_V2=true
 LANGCHAIN_API_KEY=insert_langsmith_key
 ```
-
-2. Run `docker compose up --build` in the project's root directory.
-3. Interact with Symptex locally through [Streamlit frontend URL](http://localhost:8501).
+2. In the root folder create an `.env` file to contain the folder where the Befunde are. The corresponding variable is:
+```env
+HOST_ANAMNESIS_PATH={path to Befunde}
+```
+3. Run `docker compose up --build` in the project's root directory.
+4. Interact with Symptex locally through [Streamlit frontend URL](http://localhost:8501).
 
 ## Endpoints
 
@@ -74,3 +77,5 @@ symptex/
 ├── docker-compose.yml
 └── README.md
 ```
+
+TODOs: Connect the upload of Befunde with ILVI's backend
